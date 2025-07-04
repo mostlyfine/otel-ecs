@@ -16,10 +16,10 @@ locals {
     otel_collector = "otel/opentelemetry-collector-contrib:0.98.0"
   }
 
-  # S3バケット名のプレフィックス（random_stringと組み合わせて一意性を確保）
+  # S3バケット名（AWS Account IDをprefixとして一意性を確保）
   s3_bucket_names = {
-    mimir = "${local.name}-mimir"
-    loki  = "${local.name}-loki"
-    tempo = "${local.name}-tempo"
+    mimir = "${data.aws_caller_identity.current.account_id}-${local.name}-mimir"
+    loki  = "${data.aws_caller_identity.current.account_id}-${local.name}-loki"
+    tempo = "${data.aws_caller_identity.current.account_id}-${local.name}-tempo"
   }
 }

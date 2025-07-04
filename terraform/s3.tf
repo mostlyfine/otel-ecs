@@ -2,7 +2,7 @@ module "s3_bucket_loki" {
   source  = "terraform-aws-modules/s3-bucket/aws"
   version = "4.1.2"
 
-  bucket = "${local.name}-loki-${random_string.bucket_suffix.result}"
+  bucket = "${data.aws_caller_identity.current.account_id}-${local.name}-loki"
 
   # Enable versioning
   versioning = {
@@ -42,7 +42,7 @@ module "s3_bucket_mimir" {
   source  = "terraform-aws-modules/s3-bucket/aws"
   version = "4.1.2"
 
-  bucket = "${local.name}-mimir-${random_string.bucket_suffix.result}"
+  bucket = "${data.aws_caller_identity.current.account_id}-${local.name}-mimir"
 
   # Enable versioning
   versioning = {
@@ -82,7 +82,7 @@ module "s3_bucket_tempo" {
   source  = "terraform-aws-modules/s3-bucket/aws"
   version = "4.1.2"
 
-  bucket = "${local.name}-tempo-${random_string.bucket_suffix.result}"
+  bucket = "${data.aws_caller_identity.current.account_id}-${local.name}-tempo"
 
   # Enable versioning
   versioning = {
@@ -116,11 +116,4 @@ module "s3_bucket_tempo" {
   ]
 
   tags = local.tags
-}
-
-# Random string for unique bucket names
-resource "random_string" "bucket_suffix" {
-  length  = 8
-  special = false
-  upper   = false
 }

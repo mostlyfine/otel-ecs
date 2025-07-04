@@ -63,12 +63,12 @@ resource "aws_iam_policy" "s3_access" {
           "s3:ListBucket"
         ]
         Resource = [
-          "arn:aws:s3:::${local.name}-mimir-${random_string.bucket_suffix.result}",
-          "arn:aws:s3:::${local.name}-mimir-${random_string.bucket_suffix.result}/*",
-          "arn:aws:s3:::${local.name}-loki-${random_string.bucket_suffix.result}",
-          "arn:aws:s3:::${local.name}-loki-${random_string.bucket_suffix.result}/*",
-          "arn:aws:s3:::${local.name}-tempo-${random_string.bucket_suffix.result}",
-          "arn:aws:s3:::${local.name}-tempo-${random_string.bucket_suffix.result}/*"
+          "arn:aws:s3:::${data.aws_caller_identity.current.account_id}-${local.name}-mimir",
+          "arn:aws:s3:::${data.aws_caller_identity.current.account_id}-${local.name}-mimir/*",
+          "arn:aws:s3:::${data.aws_caller_identity.current.account_id}-${local.name}-loki",
+          "arn:aws:s3:::${data.aws_caller_identity.current.account_id}-${local.name}-loki/*",
+          "arn:aws:s3:::${data.aws_caller_identity.current.account_id}-${local.name}-tempo",
+          "arn:aws:s3:::${data.aws_caller_identity.current.account_id}-${local.name}-tempo/*"
         ]
       }
     ]
@@ -158,7 +158,7 @@ module "ecs" {
           environment = [
             {
               name  = "MIMIR_S3_BUCKET"
-              value = "${local.name}-mimir-${random_string.bucket_suffix.result}"
+              value = "${data.aws_caller_identity.current.account_id}-${local.name}-mimir"
             }
           ]
           port_mappings = [
@@ -212,7 +212,7 @@ module "ecs" {
           environment = [
             {
               name  = "LOKI_S3_BUCKET"
-              value = "${local.name}-loki-${random_string.bucket_suffix.result}"
+              value = "${data.aws_caller_identity.current.account_id}-${local.name}-loki"
             }
           ]
           port_mappings = [
@@ -266,7 +266,7 @@ module "ecs" {
           environment = [
             {
               name  = "TEMPO_S3_BUCKET"
-              value = "${local.name}-tempo-${random_string.bucket_suffix.result}"
+              value = "${data.aws_caller_identity.current.account_id}-${local.name}-tempo"
             }
           ]
           port_mappings = [
