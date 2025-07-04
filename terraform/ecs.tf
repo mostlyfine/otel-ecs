@@ -1,52 +1,3 @@
-# セキュリティグループ
-resource "aws_security_group" "grafana" {
-  name_prefix = "${local.name}-grafana-"
-  vpc_id      = module.vpc.vpc_id
-
-  ingress {
-    from_port       = 3000
-    to_port         = 3000
-    protocol        = "tcp"
-    security_groups = [module.alb.security_group_id]
-  }
-
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  tags = local.tags
-}
-
-resource "aws_security_group" "internal_services" {
-  name_prefix = "${local.name}-internal-"
-  vpc_id      = module.vpc.vpc_id
-
-  ingress {
-    from_port       = 0
-    to_port         = 65535
-    protocol        = "tcp"
-    security_groups = [module.internal_alb.security_group_id]
-  }
-
-  ingress {
-    from_port = 0
-    to_port   = 65535
-    protocol  = "tcp"
-    self      = true
-  }
-
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  tags = local.tags
-}
 
 # IAMポリシー：S3アクセス用
 resource "aws_iam_policy" "s3_access" {
@@ -137,7 +88,7 @@ module "ecs" {
         }
       }
 
-      security_group_ids = [aws_security_group.grafana.id]
+      security_group_ids = [module.grafana_sg.security_group_id]
       subnet_ids         = module.vpc.private_subnets
 
       create_cloudwatch_log_group = true
@@ -159,6 +110,65 @@ module "ecs" {
             {
               name  = "MIMIR_S3_BUCKET"
               value = "${data.aws_caller_identity.current.account_id}-${local.name}-mimir"
+            },
+            # S3バックエンド設定
+            {
+              name  = "MIMIR_BLOCKS_STORAGE_BACKEND"
+              value = "s3"
+            },
+            {
+              name  = "MIMIR_BLOCKS_STORAGE_S3_BUCKET_NAME"
+              value = "${data.aws_caller_identity.current.account_id}-${local.name}-mimir"
+            },
+            {
+              name  = "MIMIR_BLOCKS_STORAGE_S3_REGION"
+              value = local.region
+            },
+            {
+              name  = "MIMIR_ALERTMANAGER_STORAGE_BACKEND"
+              value = "s3"
+            },
+            {
+              name  = "MIMIR_ALERTMANAGER_STORAGE_S3_BUCKET_NAME"
+              value = "${data.aws_caller_identity.current.account_id}-${local.name}-mimir"
+            },
+            {
+              name  = "MIMIR_RULER_STORAGE_BACKEND"
+              value = "s3"
+            },
+            {
+              name  = "MIMIR_RULER_STORAGE_S3_BUCKET_NAME"
+              value = "${data.aws_caller_identity.current.account_id}-${local.name}-mimir"
+            },
+            # 10分間の保持設定
+            {
+              name  = "MIMIR_BLOCKS_STORAGE_TSDB_BLOCK_RANGES_PERIOD"
+              value = "10m"
+            },
+            {
+              name  = "MIMIR_BLOCKS_STORAGE_TSDB_RETENTION_PERIOD"
+              value = "10m"
+            },
+            {
+              name  = "MIMIR_COMPACTOR_COMPACTION_INTERVAL"
+              value = "1m"
+            },
+            {
+              name  = "MIMIR_COMPACTOR_DELETION_DELAY"
+              value = "1m"
+            },
+            # クエリ設定（S3からの読み取り）
+            {
+              name  = "MIMIR_QUERIER_QUERY_INGESTERS_WITHIN"
+              value = "10m"
+            },
+            {
+              name  = "MIMIR_QUERIER_QUERY_STORE_FOR_LABELS_ENABLED"
+              value = "true"
+            },
+            {
+              name  = "MIMIR_STORE_GATEWAY_SHARDING_ENABLED"
+              value = "true"
             }
           ]
           port_mappings = [
@@ -188,7 +198,7 @@ module "ecs" {
         }
       }
 
-      security_group_ids = [aws_security_group.internal_services.id]
+      security_group_ids = [module.internal_services_sg.security_group_id]
       subnet_ids         = module.vpc.private_subnets
 
       task_role_policies = {
@@ -242,7 +252,7 @@ module "ecs" {
         }
       }
 
-      security_group_ids = [aws_security_group.internal_services.id]
+      security_group_ids = [module.internal_services_sg.security_group_id]
       subnet_ids         = module.vpc.private_subnets
 
       task_role_policies = {
@@ -296,7 +306,7 @@ module "ecs" {
         }
       }
 
-      security_group_ids = [aws_security_group.internal_services.id]
+      security_group_ids = [module.internal_services_sg.security_group_id]
       subnet_ids         = module.vpc.private_subnets
 
       task_role_policies = {
@@ -365,7 +375,7 @@ module "ecs" {
         }
       }
 
-      security_group_ids = [aws_security_group.internal_services.id]
+      security_group_ids = [module.internal_services_sg.security_group_id]
       subnet_ids         = module.vpc.private_subnets
 
       create_cloudwatch_log_group = true

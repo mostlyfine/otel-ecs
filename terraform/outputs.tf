@@ -46,3 +46,11 @@ output "ecs_cluster_arn" {
   description = "The ARN of the ECS cluster"
   value       = module.ecs.cluster_arn
 }
+
+output "security_groups" {
+  description = "Security group IDs for ECS services"
+  value = {
+    grafana           = module.grafana_sg.security_group_id
+    internal_services = module.internal_services_sg.security_group_id
+  }
+}
