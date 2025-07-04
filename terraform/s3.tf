@@ -64,14 +64,36 @@ module "s3_bucket_mimir" {
   ignore_public_acls      = true
   restrict_public_buckets = true
 
-  # Lifecycle configuration
+  # Transfer Acceleration for better performance
+  acceleration_status = "Enabled"
+
+  # Lifecycle configuration optimized for metrics data
   lifecycle_rule = [
     {
-      id     = "mimir_data_lifecycle"
+      id     = "mimir_metrics_lifecycle"
       status = "Enabled"
+
+      # Transition to IA after 30 days
+      transition = [
+        {
+          days          = 30
+          storage_class = "STANDARD_IA"
+        },
+        {
+          days          = 90
+          storage_class = "GLACIER"
+        }
+      ]
+
+      # Delete after 1 year
       expiration = {
         days = 365
       }
+    },
+    {
+      id     = "abort_incomplete_multipart_upload"
+      status = "Enabled"
+      abort_incomplete_multipart_upload_days = 7
     }
   ]
 
