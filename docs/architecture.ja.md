@@ -40,15 +40,74 @@
     *   単一のECSクラスターをプロビジョニングします。
     *   全てのオブザーバビリティコンポーネントは、EC2インスタンスの管理が不要なFargateサービスとして実行します。
     *   基盤コンポーネントのログ収集のために、ECSタスク定義でAWS FireLens (Fluent Bit) をログルーターとして設定します。
+*   **ログ管理**:
+    *   全てのECSサービスでFireLensを使用してログを一元管理します。
+    *   各サービスのアプリケーションログは、FireLens経由でCloudWatch Logsに送信されます。
+    *   FireLens自体の動作ログも別途CloudWatch Logsに記録され、ログ配信の可視性を確保します。
+    *   CloudWatch Logsグループは、明示的なTerraformリソースとして作成し、加えてECSモジュール内でも`create_cloudwatch_log_group = true`設定を行い、確実なログ収集を保証します。
 *   **ストレージ**:
     *   Mimir, Loki, Tempoがデータを保存するために、それぞれ専用のS3バケットを作成します。
 *   **IAM**:
     *   ECSタスク実行ロールを1つ作成します。
     *   各コンポーネント（Grafana, Mimir等）には、S3バケットへのアクセス権限など、最小限の権限を持つ専用のIAMタスクロールを割り当てます。
+    *   FireLens用のCloudWatch Logsアクセス権限を含むIAMポリシーを作成し、必要なサービスに適用します。
 *   **ロードバランシング**:
     *   GrafanaのUIへ安全にアクセスするために、インターネット向けのApplication Load Balancer (ALB)を設置します。
 
-## 5. Terraform実装方針
+## 5. FireLensログ設定詳細
+
+### 5.1 ログアーキテクチャ
+
+FireLensを使用した統一的なログ管理により、以下の構成を実現します：
+
+*   **アプリケーションログフロー**:
+    ```
+    アプリケーションコンテナ → FireLens (Fluent Bit) → CloudWatch Logs
+    ```
+
+*   **FireLensログフロー**:
+    ```
+    FireLens自体 → awslogsドライバー → CloudWatch Logs
+    ```
+
+### 5.2 ログ設定構成
+
+各ECSサービスは以下の2つのコンテナで構成されます：
+
+1. **アプリケーションコンテナ**:
+   - `log_driver = "awsfirelens"`
+   - FireLensのCloudWatch Logsプラグインを使用
+   - サービス別のロググループに送信
+
+2. **FireLens ログルーター**:
+   - AWS公式のFluent Bitイメージを使用
+   - `firelens_configuration.type = "fluentbit"`
+   - FireLens自体のログは直接CloudWatch Logsに送信
+
+### 5.3 CloudWatch Logsグループ構成
+
+以下のロググループが作成されます：
+
+*   `/ecs/${local.name}/firelens` - FireLens自体の動作ログ
+*   `/ecs/${local.name}/grafana` - Grafanaアプリケーションログ
+*   `/ecs/${local.name}/mimir` - Mimirアプリケーションログ
+*   `/ecs/${local.name}/loki` - Lokiアプリケーションログ
+*   `/ecs/${local.name}/tempo` - Tempoアプリケーションログ
+*   `/ecs/${local.name}/otel-collector` - OpenTelemetry Collectorアプリケーションログ
+
+全てのロググループは7日間の保存期間で統一管理されます。
+
+### 5.4 IAM権限設定
+
+FireLens用に専用のIAMポリシーを作成し、以下の権限を付与します：
+
+*   `logs:CreateLogGroup` - ロググループの作成
+*   `logs:CreateLogStream` - ログストリームの作成
+*   `logs:PutLogEvents` - ログイベントの送信
+
+このポリシーは、FireLensを使用する全てのECSサービスのタスクロールに適用されます。
+
+## 6. Terraform実装方針
 
 *   **モジュールの最大限の活用**: 公式の`terraform-aws-modules`を全面的に活用します。VPC, ECS, ALB, S3といった主要コンポーネントとそのサブリソース（ECSサービス、タスク定義、IAMロール、セキュリティグループ）は全てモジュールのパラメータを通じて管理し、ベストプラクティスを遵守しつつ、独自のリソース定義を最小限に抑えます。
 *   **動的でポータブルな設定**: `data`ソースを用いて利用可能なアベイラビリティゾーンを動的に取得することで、構成のポータビリティを高めます。
@@ -77,4 +136,4 @@
 *   `network.tf`: `terraform-aws-modules/vpc/aws`を用いたVPCの定義。
 *   `s3.tf`: `terraform-aws-modules/s3-bucket/aws`を用いたS3バケットの定義。
 *   `alb.tf`: `terraform-aws-modules/alb/aws`を用いたApplication Load Balancerの定義。
-*   `ecs.tf`: プロジェクトの中核。`terraform-aws-modules/ecs/aws`モジュールを使用して、ECSクラスター、タスク定義、サービス、IAMロール（S3アクセスポリシーを含む）、セキュリティグループを統合的に定義・管理。
+*   `ecs.tf`: プロジェクトの中核。`terraform-aws-modules/ecs/aws`モジュールを使用して、ECSクラスター、タスク定義、サービス、IAMロール（S3アクセスポリシーとFireLens用CloudWatch Logsアクセスポリシーを含む）、セキュリティグループ、CloudWatch Logsグループを統合的に定義・管理。FireLensログルーターとアプリケーションコンテナの設定も含まれます。CloudWatch Logsグループは明示的なリソースとして作成され、さらにECSモジュール内でも`create_cloudwatch_log_group = true`設定により二重の保証を提供します。

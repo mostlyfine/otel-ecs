@@ -28,6 +28,71 @@ resource "aws_iam_policy" "s3_access" {
   tags = local.tags
 }
 
+# IAMポリシー：FireLens用CloudWatch Logsアクセス
+resource "aws_iam_policy" "firelens_logs" {
+  name_prefix = "${local.name}-firelens-logs-"
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "logs:CreateLogGroup",
+          "logs:CreateLogStream",
+          "logs:PutLogEvents"
+        ]
+        Resource = "arn:aws:logs:${local.region}:${data.aws_caller_identity.current.account_id}:*"
+      }
+    ]
+  })
+
+  tags = local.tags
+}
+
+# CloudWatch Logsグループ：FireLens用
+resource "aws_cloudwatch_log_group" "firelens" {
+  name              = "/ecs/${local.name}/firelens"
+  retention_in_days = 7
+
+  tags = local.tags
+}
+
+# CloudWatch Logsグループ：各アプリケーション用（FireLens経由）
+resource "aws_cloudwatch_log_group" "grafana" {
+  name              = "/ecs/${local.name}/grafana"
+  retention_in_days = 7
+
+  tags = local.tags
+}
+
+resource "aws_cloudwatch_log_group" "mimir" {
+  name              = "/ecs/${local.name}/mimir"
+  retention_in_days = 7
+
+  tags = local.tags
+}
+
+resource "aws_cloudwatch_log_group" "loki" {
+  name              = "/ecs/${local.name}/loki"
+  retention_in_days = 7
+
+  tags = local.tags
+}
+
+resource "aws_cloudwatch_log_group" "tempo" {
+  name              = "/ecs/${local.name}/tempo"
+  retention_in_days = 7
+
+  tags = local.tags
+}
+
+resource "aws_cloudwatch_log_group" "otel_collector" {
+  name              = "/ecs/${local.name}/otel-collector"
+  retention_in_days = 7
+
+  tags = local.tags
+}
+
 module "ecs" {
   source  = "terraform-aws-modules/ecs/aws"
   version = "5.9.0"
@@ -70,11 +135,27 @@ module "ecs" {
           ]
 
           log_configuration = {
+            log_driver = "awsfirelens"
+            options = {
+              "Name"              = "cloudwatch_logs"
+              "region"            = local.region
+              "log_group_name"    = aws_cloudwatch_log_group.grafana.name
+              "log_stream_prefix" = "firelens"
+            }
+          }
+        }
+
+        log_router = {
+          image = "906394416424.dkr.ecr.${local.region}.amazonaws.com/aws-for-fluent-bit:stable"
+          firelens_configuration = {
+            type = "fluentbit"
+          }
+          log_configuration = {
             log_driver = "awslogs"
             options = {
-              "awslogs-group"         = "/ecs/${local.name}/grafana"
+              "awslogs-group"         = aws_cloudwatch_log_group.firelens.name
               "awslogs-region"        = local.region
-              "awslogs-stream-prefix" = "ecs"
+              "awslogs-stream-prefix" = "firelens"
             }
           }
         }
@@ -90,6 +171,10 @@ module "ecs" {
 
       security_group_ids = [module.grafana_sg.security_group_id]
       subnet_ids         = module.vpc.private_subnets
+
+      task_role_policies = {
+        firelens_logs = aws_iam_policy.firelens_logs.arn
+      }
 
       create_cloudwatch_log_group = true
       cloudwatch_log_group_name   = "/ecs/${local.name}/grafana"
@@ -180,11 +265,27 @@ module "ecs" {
           ]
 
           log_configuration = {
+            log_driver = "awsfirelens"
+            options = {
+              "Name"              = "cloudwatch_logs"
+              "region"            = local.region
+              "log_group_name"    = aws_cloudwatch_log_group.mimir.name
+              "log_stream_prefix" = "firelens"
+            }
+          }
+        }
+
+        log_router = {
+          image = "906394416424.dkr.ecr.${local.region}.amazonaws.com/aws-for-fluent-bit:stable"
+          firelens_configuration = {
+            type = "fluentbit"
+          }
+          log_configuration = {
             log_driver = "awslogs"
             options = {
-              "awslogs-group"         = "/ecs/${local.name}/mimir"
+              "awslogs-group"         = aws_cloudwatch_log_group.firelens.name
               "awslogs-region"        = local.region
-              "awslogs-stream-prefix" = "ecs"
+              "awslogs-stream-prefix" = "firelens"
             }
           }
         }
@@ -202,7 +303,8 @@ module "ecs" {
       subnet_ids         = module.vpc.private_subnets
 
       task_role_policies = {
-        s3_access = aws_iam_policy.s3_access.arn
+        s3_access     = aws_iam_policy.s3_access.arn
+        firelens_logs = aws_iam_policy.firelens_logs.arn
       }
 
       create_cloudwatch_log_group = true
@@ -234,11 +336,27 @@ module "ecs" {
           ]
 
           log_configuration = {
+            log_driver = "awsfirelens"
+            options = {
+              "Name"              = "cloudwatch_logs"
+              "region"            = local.region
+              "log_group_name"    = aws_cloudwatch_log_group.loki.name
+              "log_stream_prefix" = "firelens"
+            }
+          }
+        }
+
+        log_router = {
+          image = "906394416424.dkr.ecr.${local.region}.amazonaws.com/aws-for-fluent-bit:stable"
+          firelens_configuration = {
+            type = "fluentbit"
+          }
+          log_configuration = {
             log_driver = "awslogs"
             options = {
-              "awslogs-group"         = "/ecs/${local.name}/loki"
+              "awslogs-group"         = aws_cloudwatch_log_group.firelens.name
               "awslogs-region"        = local.region
-              "awslogs-stream-prefix" = "ecs"
+              "awslogs-stream-prefix" = "firelens"
             }
           }
         }
@@ -256,7 +374,8 @@ module "ecs" {
       subnet_ids         = module.vpc.private_subnets
 
       task_role_policies = {
-        s3_access = aws_iam_policy.s3_access.arn
+        s3_access     = aws_iam_policy.s3_access.arn
+        firelens_logs = aws_iam_policy.firelens_logs.arn
       }
 
       create_cloudwatch_log_group = true
@@ -288,11 +407,27 @@ module "ecs" {
           ]
 
           log_configuration = {
+            log_driver = "awsfirelens"
+            options = {
+              "Name"              = "cloudwatch_logs"
+              "region"            = local.region
+              "log_group_name"    = aws_cloudwatch_log_group.tempo.name
+              "log_stream_prefix" = "firelens"
+            }
+          }
+        }
+
+        log_router = {
+          image = "906394416424.dkr.ecr.${local.region}.amazonaws.com/aws-for-fluent-bit:stable"
+          firelens_configuration = {
+            type = "fluentbit"
+          }
+          log_configuration = {
             log_driver = "awslogs"
             options = {
-              "awslogs-group"         = "/ecs/${local.name}/tempo"
+              "awslogs-group"         = aws_cloudwatch_log_group.firelens.name
               "awslogs-region"        = local.region
-              "awslogs-stream-prefix" = "ecs"
+              "awslogs-stream-prefix" = "firelens"
             }
           }
         }
@@ -310,7 +445,8 @@ module "ecs" {
       subnet_ids         = module.vpc.private_subnets
 
       task_role_policies = {
-        s3_access = aws_iam_policy.s3_access.arn
+        s3_access     = aws_iam_policy.s3_access.arn
+        firelens_logs = aws_iam_policy.firelens_logs.arn
       }
 
       create_cloudwatch_log_group = true
@@ -357,11 +493,27 @@ module "ecs" {
           ]
 
           log_configuration = {
+            log_driver = "awsfirelens"
+            options = {
+              "Name"              = "cloudwatch_logs"
+              "region"            = local.region
+              "log_group_name"    = aws_cloudwatch_log_group.otel_collector.name
+              "log_stream_prefix" = "firelens"
+            }
+          }
+        }
+
+        log_router = {
+          image = "906394416424.dkr.ecr.${local.region}.amazonaws.com/aws-for-fluent-bit:stable"
+          firelens_configuration = {
+            type = "fluentbit"
+          }
+          log_configuration = {
             log_driver = "awslogs"
             options = {
-              "awslogs-group"         = "/ecs/${local.name}/otel-collector"
+              "awslogs-group"         = aws_cloudwatch_log_group.firelens.name
               "awslogs-region"        = local.region
-              "awslogs-stream-prefix" = "ecs"
+              "awslogs-stream-prefix" = "firelens"
             }
           }
         }
@@ -377,6 +529,10 @@ module "ecs" {
 
       security_group_ids = [module.internal_services_sg.security_group_id]
       subnet_ids         = module.vpc.private_subnets
+
+      task_role_policies = {
+        firelens_logs = aws_iam_policy.firelens_logs.arn
+      }
 
       create_cloudwatch_log_group = true
       cloudwatch_log_group_name   = "/ecs/${local.name}/otel-collector"

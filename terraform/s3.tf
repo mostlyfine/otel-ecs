@@ -91,8 +91,8 @@ module "s3_bucket_mimir" {
       }
     },
     {
-      id     = "abort_incomplete_multipart_upload"
-      status = "Enabled"
+      id                                     = "abort_incomplete_multipart_upload"
+      status                                 = "Enabled"
       abort_incomplete_multipart_upload_days = 7
     }
   ]
